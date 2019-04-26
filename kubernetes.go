@@ -187,7 +187,7 @@ func fit(pod *Pod) (string,error) {
 		mem := strconv.Itoa(memoryRequired)
 		mem = mem + "MB"
 
-		argstr := []string{"-l","select=1:ncpus=" + ncpus + ":mem="+mem,"-N",pod.Metadata.Name,"-v","PODNAME="+pod.Metadata.Name,"simple_job.sh"}  
+		argstr := []string{"-l","select=1:ncpus=" + ncpus + ":mem="+mem,"-N",pod.Metadata.Name,"-v","PODNAME="+pod.Metadata.Name,"kubernetes_job.sh"}
 		out, err := exec.Command("qsub", argstr...).Output()
 	        if err != nil {
 	            log.Fatal(err)
