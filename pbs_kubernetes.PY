@@ -48,20 +48,73 @@ This hook services the following events:
 import pbs
 import os
 import subprocess
+import traceback
+import string
+import sys
+import json as js
 
+e = pbs.event()
+
+def caller_name():
+    """
+    Returns the name of the calling function or method.
+    """
+    return str(sys._getframe(1).f_code.co_name)
+
+def decode_dict(data):
+    """
+    Method to convert dictionary from unicode to utf-8
+    """
+    returnvalue = {}
+    for key, value in data.iteritems():
+        if isinstance(key, unicode):
+            key = key.encode('utf-8')
+        if isinstance(value, unicode):
+            value = value.encode('utf-8')
+        elif isinstance(value, list):
+            value = decode_list(value)
+        elif isinstance(value, dict):
+            value = decode_dict(value)
+        returnvalue[key] = value
+    return returnvalue
+
+def parse_config_file():
+    """
+    Read in the config file and set the necessary parameters
+    """
+    pbs.logmsg(pbs.EVENT_DEBUG4, "%s: Method called " %
+               (caller_name()))
+    cfg_file = pbs.hook_config_filename
+    pbs.logmsg(pbs.EVENT_DEBUG4, "%s: Config file is %s" %
+               (caller_name(), cfg_file))
+    try:
+        cfg = js.load(open(cfg_file, 'r'), object_hook=decode_dict)
+    except IOError:
+        raise ConfigError("I/O error in reading config file")
+    except ValueError:
+        raise ConfigError("JSON parsing error in reading config file")
+    except Exception:
+        raise
+
+    # Set some defaults if they are not present
+    if 'kubelet_config' not in cfg.keys():
+        msg = "Kubelet config path not found"
+
+    return cfg
+
+conf = parse_config_file()
 
 def execjob_end_handler():
     """
     Method for pod deletion after job completion
     """
     pbs.logmsg(pbs.EVENT_DEBUG4, "%s: Method called" % (caller_name()))
-    e = pbs.event()
     j = e.job
     if "PODNAME" not in str(e.job.Variable_List):
         pbs.logmsg(pbs.LOG_DEBUG,
                    "Deleting the Pod associated with job %s" % j.id)
         try:
-            pod_path = os.path.join(os.sep + 'home', 'kubelet',
+            pod_path = os.path.join(conf['kubelet_config'],
                                     str(e.job.Job_Name) + ".yaml")
             os.remove(pod_path)
         except OSError:
@@ -92,17 +145,17 @@ def execjob_launch_handler():
     Method for pod creation
     """
     pbs.logmsg(pbs.EVENT_DEBUG4, "%s: Method called" % (caller_name()))
-    e = pbs.event()
+    mem = "0"
     cpu = str(e.job.Resource_List["ncpus"])
-    mem = str(e.job.Resource_List["mem"])
-    mem = mem[:-2]
-    pod_path = os.path.join(os.sep + "home", "kubelet",
+    if e.job.Resource_List["mem"] != None:
+        mem = str(e.job.Resource_List["mem"])
+        mem = mem[:-2]
+    pod_path = os.path.join(conf['kubelet_config'],
                             str(e.job.Job_Name) + ".yaml")
-    pod_discription = """
-apiVersion: v1
+    pod_discription = """apiVersion: v1
 kind: Pod
 metadata:
-  name: """ + str(e.job.Job_Name) + """
+  name: """ + str(e.job.id) + """
 spec:
   containers:
   - name: sleep-forever

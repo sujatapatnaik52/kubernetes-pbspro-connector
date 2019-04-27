@@ -1,3 +1,41 @@
+/*
+ * Copyright (C) 1994-2019 Altair Engineering, Inc.
+ * For more information, contact Altair at www.altair.com.
+ *
+ * This file is part of the PBS Professional ("PBS Pro") software.
+ *
+ * Open Source License Information:
+ *
+ * PBS Pro is free software. You can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * PBS Pro is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.
+ * See the GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Commercial License Information:
+ *
+ * For a copy of the commercial license terms and conditions,
+ * go to: (http://www.pbspro.com/UserArea/agreement.html)
+ * or contact the Altair Legal Department.
+ *
+ * Altair’s dual-license business model allows companies, individuals, and
+ * organizations to create proprietary derivative works of PBS Pro and
+ * distribute them - whether embedded or bundled with other software -
+ * under a commercial license agreement.
+ *
+ * Use of Altair’s trademarks, including but not limited to "PBS™",
+ * "PBS Professional®", and "PBS Pro™" and Altair’s logos is subject to Altair's
+ * trademark licensing policies.
+ *
+ */
+
 package main
 
 import (
@@ -43,12 +81,12 @@ var (
 func postsEvent(event Event) error {
 	var bf []byte
 	body := bytes.NewBuffer(bf)
-	err := json.NewEncoder(body).Encode(event)
-	if err != nil {
-		return err
+	error := json.NewEncoder(body).Encode(event)
+	if error != nil {
+		return error
 	}
 
-	request := &http.Request{
+	req :=  &http.Request{
 		Body:          ioutil.NopCloser(body),
 		ContentLength: int64(body.Len()),
 		Header:        make(http.Header),
@@ -59,14 +97,14 @@ func postsEvent(event Event) error {
 			Scheme: "http",
 		},
 	}
-	request.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return err
+	res, error := http.DefaultClient.Do(req)
+	if error != nil {
+		return error
 	}
-	if resp.StatusCode != 201 {
-		return errors.New("Event: Unexpected HTTP status code" + resp.Status)
+	if res.StatusCode != 201 {
+		return errors.New("Event: Unexpected HTTP status code" + res.Status)
 	}
 	return nil
 }
@@ -75,42 +113,42 @@ func watchUnscheduledPods() (<-chan Pod, <-chan error) {
 	pods := make(chan Pod)
 	errc := make(chan error, 1)
 
-	v := url.Values{}
-	v.Set("fieldSelector", "spec.nodeName=")	
-	v.Add("sort","creationTimestamp asc")
-	request := &http.Request{
+	val := url.Values{}
+	val.Set("fieldSelector", "spec.nodeName=")	
+	val.Add("sort","creationTimestamp asc")
+	req  := &http.Request{
 		Header: make(http.Header),
 		Method: http.MethodGet,
 		URL: &url.URL{
 			Host:     apiHost,
 			Path:     watchPodEndpoint,
-			RawQuery: v.Encode(),
+			RawQuery: val.Encode(),
 			Scheme:   "http",
 		},
 	}	
-	request.Header.Set("Accept", "application/json, */*")
+	req.Header.Set("Accept", "application/json, */*")
 
 	go func() {		
 		for {			
-			resp, err := http.DefaultClient.Do(request)
-			if err != nil {
-				errc <- err
+			res, error := http.DefaultClient.Do(req)
+			if error != nil {
+				errc <- error
 				time.Sleep(5 * time.Second)
 				continue
 			}
 
-			if resp.StatusCode != 200 {
-				errc <- errors.New("Error code: " + resp.Status)
+			if res.StatusCode != 200 {
+				errc <- errors.New("Error code: " + res.Status)
 				time.Sleep(5 * time.Second)
 				continue
 			}
 
-			decoder := json.NewDecoder(resp.Body)
+			decoder := json.NewDecoder(res.Body)
 			for {
 				var event PodWatchEvent
-				err = decoder.Decode(&event)
-				if err != nil {
-					errc <- err
+				error = decoder.Decode(&event)
+				if error != nil {
+					errc <- error
 					break
 				}
 
@@ -127,28 +165,28 @@ func watchUnscheduledPods() (<-chan Pod, <-chan error) {
 func getUnscheduledPods() (*PodList, error) {
 	var podList PodList	
 
-	v := url.Values{}
-	v.Set("fieldSelector", "spec.nodeName=")
+	val := url.Values{}
+	val.Set("fieldSelector", "spec.nodeName=")
 
-	request := &http.Request{
+	req  := &http.Request{
 		Header: make(http.Header),
 		Method: http.MethodGet,
 		URL: &url.URL{
 			Host:     apiHost,
 			Path:     podEndpoint,
-			RawQuery: v.Encode(),
+			RawQuery: val.Encode(),
 			Scheme:   "http",
 		},
 	}
-	request.Header.Set("Accept", "application/json, */*")
+	req.Header.Set("Accept", "application/json, */*")
 
-	resp, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return nil, err
+	res, error := http.DefaultClient.Do(req)
+	if error != nil {
+		return nil, error
 	}
-	err = json.NewDecoder(resp.Body).Decode(&podList)
-	if err != nil {
-		return nil, err
+	error = json.NewDecoder(res.Body).Decode(&podList)
+	if error != nil {
+		return nil, error
 	}		
 	return &podList, nil
 }
@@ -325,29 +363,29 @@ func annotation(pod *Pod, jobid string) {
 	
 	var b []byte
 	body := bytes.NewBuffer(b)
-	err := json.NewEncoder(body).Encode(patch)
-	if err != nil {
-		log.Println(err)
+	error := json.NewEncoder(body).Encode(patch)
+	if error != nil {
+		log.Println(error)
 		os.Exit(1)
 	}
 	
 	url := "http://" + apiHost + podNamespace + pod.Metadata.Name
-	request, err := http.NewRequest("PATCH", url, body)
-	if err != nil {
-		log.Println(err)
+	req, error := http.NewRequest("PATCH", url, body)
+	if error != nil {
+		log.Println(error)
 		os.Exit(1)
 	}
 	
-	request.Header.Set("Content-Type", "application/strategic-merge-patch+json")
-	request.Header.Set("Accept", "application/json, */*")
+	req.Header.Set("Content-Type", "application/strategic-merge-patch+json")
+	req.Header.Set("Accept", "application/json, */*")
 	
-	resp, err := http.DefaultClient.Do(request)
-	if err != nil {
-		log.Println(err)
+	res, error := http.DefaultClient.Do(req)
+	if error != nil {
+		log.Println(error)
 		os.Exit(1)
 	}					
-	if resp.StatusCode != 200 {
-		log.Println(err)
+	if res.StatusCode != 200 {
+		log.Println(error)
 		os.Exit(1)
 	}
 	
@@ -357,7 +395,7 @@ func annotation(pod *Pod, jobid string) {
 
 
 func bind(pod *Pod, node string) error {
-	binding := Binding{
+	bindreq := Binding{
 		ApiVersion: "v1",
 		Kind:       "Binding",
 		Metadata:   Metadata{Name: pod.Metadata.Name},
@@ -370,12 +408,12 @@ func bind(pod *Pod, node string) error {
 
 	var b []byte
 	body := bytes.NewBuffer(b)
-	err := json.NewEncoder(body).Encode(binding)
-	if err != nil {
-		return err
+	error := json.NewEncoder(body).Encode(bindreq)
+	if error != nil {
+		return error
 	}
 
-	request := &http.Request{
+	req :=  &http.Request{
 		Body:          ioutil.NopCloser(body),
 		ContentLength: int64(body.Len()),
 		Header:        make(http.Header),
@@ -386,22 +424,22 @@ func bind(pod *Pod, node string) error {
 			Scheme: "http",
 		},
 	}
-	request.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return err
+	res, error := http.DefaultClient.Do(req)
+	if error != nil {
+		return error
 	}
-	if resp.StatusCode != 201 {
-		return errors.New("Binding: Unexpected HTTP status code" + resp.Status)
+	if res.StatusCode != 201 {
+		return errors.New("Binding: Unexpected HTTP status code" + res.Status)
 	}
 
 	// Shoot a Kubernetes event that the Pod was scheduled successfully.
-	message := fmt.Sprintf("Successfully assigned %s to %s", pod.Metadata.Name, node)
+	msg := fmt.Sprintf("Successfully assigned %s to %s", pod.Metadata.Name, node)
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	event := Event{
 		Count:          1,
-		Message:        message,
+		Message:        msg,
 		Metadata:       Metadata{GenerateName: pod.Metadata.Name + "-"},
 		Reason:         "Scheduled",
 		LastTimestamp:  timestamp,
@@ -415,6 +453,6 @@ func bind(pod *Pod, node string) error {
 			Uid:       pod.Metadata.Uid,
 		},
 	}
-	log.Println(message)
+	log.Println(msg)
 	return postsEvent(event)
 }
