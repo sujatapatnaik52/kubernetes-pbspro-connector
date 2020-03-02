@@ -66,7 +66,7 @@ def decode_dict(data):
     Method to convert dictionary from unicode to utf-8
     """
     returnvalue = {}
-    for key, value in data.iteritems():
+    for key, value in data.items():
         if isinstance(key, unicode):
             key = key.encode('utf-8')
         if isinstance(value, unicode):
