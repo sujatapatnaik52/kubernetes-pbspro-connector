@@ -37,9 +37,9 @@ Install PBS Pro hook and config file
 qmgr << EOF
 create hook pbs-kubernetes
 set hook pbs-kubernetes event = execjob_end
-set hook pbs-kubernetes event += execjob_launch
-import hook pbs-kubernetes application/x-python base64 pbs_kubernetes.PY
-import hook pbs-kubernetes application/x-config base64 pbs_kubernetes.CF
+set hook pbs-kubernetes event += execjob_begin
+import hook pbs-kubernetes application/x-python default pbs_kubernetes.PY
+import hook pbs-kubernetes application/x-config default pbs_kubernetes.CF
 EOF
 ```
 
@@ -97,9 +97,21 @@ Starting Scheduler Iteration
 ## Usage
 Simple example to assign a cpu and memory request and a cpu and memory limit to a Container. A Container is guaranteed to have as much memory as it requests but is not allowed to use more memory than its limit.
 
-### Create a namespace
+### Using a non default namespace for pods and jobs
+Create a namespace
 ```bash
 kubectl create namespace redis
+```
+
+Update `kubernetes.go` by adding the value for `nonDefaultNamespace`:
+```bash
+# in file scheduler/kubernetes.go update line:
+nonDefaultNamespace           = "redis"
+```
+
+Update `pbs_kubernetes.PY` by adding the value for `NON_DEFAULT_NAMESPACE`:
+```bash
+NON_DEFAULT_NAMESPACE  = "redis"
 ```
 
 ### Specify cpu and memory requests

@@ -69,12 +69,13 @@ type PBSPodMetadata struct {
 
 
 var (
+	nonDefaultNamespace = "asml-pbs"
 	apiHost           = "127.0.0.1:8001"
-	bindingEndpoint  = "/api/v1/namespaces/default/pods/%s/binding/"
-	eventEndpoint    = "/api/v1/namespaces/default/events"
+	bindingEndpoint  = "/api/v1/namespaces/%s/pods/%s/binding/"
+	eventEndpoint    = "/api/v1/namespaces/%s/events"
 	nodeEndpoint     = "/api/v1/nodes"
 	podEndpoint      = "/api/v1/pods"
-	podNamespace	  = "/api/v1/namespaces/default/pods/"
+	podNamespace	  = "/api/v1/namespaces/%s/pods/"
 	watchPodEndpoint = "/api/v1/watch/pods"
 )
 
@@ -93,7 +94,7 @@ func postsEvent(event Event) error {
 		Method:        http.MethodPost,
 		URL: &url.URL{
 			Host:   apiHost,
-			Path:   eventEndpoint,
+			Path:   fmt.Sprintf(eventEndpoint, nonDefaultNamespace),
 			Scheme: "http",
 		},
 	}
@@ -280,7 +281,7 @@ func fit(pod *Pod) (string,error) {
 		InvolvedObject: ObjectReference{
 			Kind:      "Pod",
 			Name:      pod.Metadata.Name,
-			Namespace: "default",
+			Namespace: nonDefaultNamespace,
 			Uid:       pod.Metadata.Uid,
 		},
 	}
@@ -368,8 +369,9 @@ func annotation(pod *Pod, jobid string) {
 		log.Println(error)
 		os.Exit(1)
 	}
-	
-	url := "http://" + apiHost + podNamespace + pod.Metadata.Name
+
+	var ns = fmt.Sprintf(podNamespace, nonDefaultNamespace)
+	url := "http://" + apiHost + ns + pod.Metadata.Name
 	req, error := http.NewRequest("PATCH", url, body)
 	if error != nil {
 		log.Println(error)
@@ -420,7 +422,7 @@ func bind(pod *Pod, node string) error {
 		Method:        http.MethodPost,
 		URL: &url.URL{
 			Host:   apiHost,
-			Path:   fmt.Sprintf(bindingEndpoint, pod.Metadata.Name),
+			Path:   fmt.Sprintf(bindingEndpoint, nonDefaultNamespace, pod.Metadata.Name),
 			Scheme: "http",
 		},
 	}
@@ -449,7 +451,7 @@ func bind(pod *Pod, node string) error {
 		InvolvedObject: ObjectReference{
 			Kind:      "Pod",
 			Name:      pod.Metadata.Name,
-			Namespace: "default",
+			Namespace: nonDefaultNamespace,
 			Uid:       pod.Metadata.Uid,
 		},
 	}

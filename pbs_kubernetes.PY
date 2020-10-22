@@ -42,7 +42,7 @@ the same cluster
 
 This hook services the following events:
 - execjob_end
-- execjob_launch
+- execjob_begin
 """
 
 import pbs
@@ -52,8 +52,10 @@ import traceback
 import string
 import sys
 import json as js
+import re
 
 e = pbs.event()
+NON_DEFAULT_NAMESPACE = "asml-pbs"
 
 def caller_name():
     """
@@ -66,11 +68,11 @@ def decode_dict(data):
     Method to convert dictionary from unicode to utf-8
     """
     returnvalue = {}
-    for key, value in data.iteritems():
-        if isinstance(key, unicode):
-            key = key.encode('utf-8')
-        if isinstance(value, unicode):
-            value = value.encode('utf-8')
+    for key, value in data.items():
+        if isinstance(key, bytes):
+            key = key.decode('utf-8')
+        if isinstance(value, bytes):
+            value = value.decode('utf-8')
         elif isinstance(value, list):
             value = decode_list(value)
         elif isinstance(value, dict):
@@ -139,14 +141,27 @@ def execjob_end_handler():
                        "Unable to run command: %s.\n err: %s" %
                        (' '.join(del_cmd), stderr))
 
-
-def execjob_launch_handler():
+def execjob_begin_handler():
     """
     Method for pod creation
     """
     pbs.logmsg(pbs.EVENT_DEBUG4, "%s: Method called" % (caller_name()))
+    hostname = pbs.get_local_nodename()
     mem = "0"
-    cpu = str(e.job.Resource_List["ncpus"])
+    cpu = 0
+    execv_chunks = re.findall(r'\(.*?\)', str(e.job.exec_vnode))
+    chunks = []
+
+    for chunk in execv_chunks:
+        chunks.extend(chunk.split("+"))
+
+    for each in chunks:
+        if hostname in each and "ncpus" in each:
+            chunk_val = each.strip("(").strip(")").split(":")
+            for rsc in chunk_val:
+                if "ncpus" in rsc:
+                    cpu += int(rsc.split("=")[1])
+
     if e.job.Resource_List["mem"] != None:
         mem = str(e.job.Resource_List["mem"])
         mem = mem[:-2]
@@ -156,13 +171,14 @@ def execjob_launch_handler():
 kind: Pod
 metadata:
   name: """ + str(e.job.id) + """
+  namespace: """ + NON_DEFAULT_NAMESPACE + """
 spec:
   containers:
   - name: sleep-forever
     image: gcr.io/google_containers/pause:0.8.0
     resources:
-      limits:
-        cpu: """ + cpu + """m
+      requests:
+        cpu: """ + str(cpu) + """
         memory: """ + mem + """Mi"""
     if "PODNAME" not in str(e.job.Variable_List):
         try:
@@ -171,12 +187,12 @@ spec:
             f.close()
         except IOError:
             pbs.logmsg(pbs.EVENT_DEBUG,
-                       "I/O error in writing to file: %s" % path)
-
+                       "I/O error in writing to file: %s" % pod_path)
 
 def main():
-    if e.type == pbs.EXECJOB_LAUNCH:
-        execjob_launch_handler()
+
+    if e.type == pbs.EXECJOB_BEGIN:
+        execjob_begin_handler()
 
     if e.type == pbs.EXECJOB_END:
         execjob_end_handler()
