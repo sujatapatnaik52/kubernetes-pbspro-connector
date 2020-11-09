@@ -39,7 +39,6 @@
 PBS Professional hook for creation of kubernetes pod to maintain consistency of
 resources used and resources available for both PBS and Kubernetes running on
 the same cluster
-
 This hook services the following events:
 - execjob_end
 - execjob_begin
@@ -55,7 +54,16 @@ import json as js
 import re
 
 e = pbs.event()
-NON_DEFAULT_NAMESPACE = "asml-pbs"
+euser = e.job.euser
+user_home = os.path.join(os.sep, "home", euser)
+
+# Set values to the following
+NON_DEFAULT_NAMESPACE = "default"
+schedulerName = ""
+serviceAccountName = ""
+kubectl_path = os.path.join(os.sep, "usr", "bin", "kubectl")
+dynamic_pod_path = os.path.join(os.sep, "home", euser)
+
 
 def caller_name():
     """
@@ -112,40 +120,41 @@ def execjob_end_handler():
     """
     pbs.logmsg(pbs.EVENT_DEBUG4, "%s: Method called" % (caller_name()))
     j = e.job
-    if "PODNAME" not in str(e.job.Variable_List):
-        pbs.logmsg(pbs.LOG_DEBUG,
-                   "Deleting the Pod associated with job %s" % j.id)
-        try:
-            pod_path = os.path.join(conf['kubelet_config'],
-                                    str(e.job.Job_Name) + ".yaml")
-            os.remove(pod_path)
-        except OSError:
-            pbs.logmsg(pbs.LOG_DEBUG, "Pod deletion Failed")
-    else:
-        podname = j.Variable_List["PODNAME"]
-        pbs.logmsg(pbs.LOG_DEBUG, "Deleting Pod %s associated with job %s" %
-                   (podname, j.id))
-        os.environ['KUBERNETES_MASTER'] = "http://10.0.0.4:8080"
-        del_cmd = ["/bin/kubectl", "delete", "pod", podname]
-        try:
-            p = subprocess.Popen(del_cmd, shell=False,
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
-            stdout, stderr = p.communicate()
-        except OSError:
-            pbs.logmsg(pbs.EVENT_DEBUG, "Failed to execute: %s" %
-                       ' '.join(del_cmd))
-        status = process.returncode
-        if status != 0:
-            pbs.logmsg(pbs.EVENT_DEBUG,
-                       "Unable to run command: %s.\n err: %s" %
-                       (' '.join(del_cmd), stderr))
+    if "PODNAME" in str(e.job.Variable_List):
+        pbs.logmsg(pbs.LOG_DEBUG, "Nothing to do")
+        return
+    pbs.logmsg(pbs.LOG_DEBUG,
+               "Deleting the Pod associated with job %s" % j.id)
+    try:
+        pod_path = os.path.join(dynamic_pod_path, 
+                                str(e.job.Job_Name) + ".yaml")
+        os.remove(pod_path)
+    except OSError:
+        pbs.logmsg(pbs.LOG_DEBUG, "Pod deletion Failed")
+    podname = str(j.id)
+        
+    os.chdir(user_home)
+    del_cmd = [kubectl_path, "delete", "pod", podname, "-n", NON_DEFAULT_NAMESPACE]
+    pbs.logmsg(pbs.LOG_DEBUG, "Running command : %s" % ' '.join(del_cmd))
+    try:
+        p = subprocess.Popen(del_cmd, shell=False,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        stdout, stderr = p.communicate()
+    except OSError:
+        pbs.logmsg(pbs.EVENT_DEBUG, "Failed to execute: %s" %
+                   ' '.join(del_cmd))
+    status = p.returncode
+    if status != 0:
+        pbs.logmsg(pbs.EVENT_DEBUG,
+                   "Unable to run command: %s.\n err: %s" %
+                   (' '.join(del_cmd), stderr))
 
 def execjob_begin_handler():
     """
     Method for pod creation
     """
-    pbs.logmsg(pbs.EVENT_DEBUG4, "%s: Method called" % (caller_name()))
+    pbs.logmsg(pbs.EVENT_DEBUG, "%s: Method called" % (caller_name()))
     hostname = pbs.get_local_nodename()
     mem = "0"
     cpu = 0
@@ -165,7 +174,7 @@ def execjob_begin_handler():
     if e.job.Resource_List["mem"] != None:
         mem = str(e.job.Resource_List["mem"])
         mem = mem[:-2]
-    pod_path = os.path.join(conf['kubelet_config'],
+    pod_path = os.path.join(dynamic_pod_path,
                             str(e.job.Job_Name) + ".yaml")
     pod_discription = """apiVersion: v1
 kind: Pod
@@ -173,6 +182,9 @@ metadata:
   name: """ + str(e.job.id) + """
   namespace: """ + NON_DEFAULT_NAMESPACE + """
 spec:
+  schedulerName: """ + schedulerName + """
+  serviceAccountName: """ + serviceAccountName + """
+  nodeName: """ + hostname + """
   containers:
   - name: sleep-forever
     image: gcr.io/google_containers/pause:0.8.0
@@ -188,6 +200,22 @@ spec:
         except IOError:
             pbs.logmsg(pbs.EVENT_DEBUG,
                        "I/O error in writing to file: %s" % pod_path)
+        os.chdir(user_home)
+        cmd = [kubectl_path, "apply", "-f", pod_path]
+        try:
+            p = subprocess.Popen(cmd, shell=False,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+            stdout, stderr = p.communicate()
+        except OSError:
+            pbs.logmsg(pbs.EVENT_DEBUG, "Failed to execute: %s" %
+                       ' '.join(cmd))
+        status = p.returncode
+        if status != 0:
+            pbs.logmsg(pbs.EVENT_DEBUG,
+                       "Unable to run command: %s.\n err: %s" %
+                       (' '.join(cmd), stderr))
+        
 
 def main():
 

@@ -12,6 +12,7 @@ A hook is a block of Python code that PBS Pro executes at certain events, for ex
 1. [PBS Professional](https://github.com/PBSPro/pbspro) is installed and configured. 
 2. [Kubernetes](https://github.com/kubernetes/kubernetes) is installed and configured on PBS Server host. 
 3. kubectl command is assumed to be installed in /bin (as defined in kubernetes.PY)
+4. Add kubeconfig files to root's home directory
 
 ### Steps
 Clone the Kubernetes PBS Pro Connector repository to the host. 
@@ -31,6 +32,7 @@ The value to --config is the absolute path to the directory that the kubelet wil
     "kubelet_config": "/aboslute/path/to/kubelete_config"
 }
 ```
+Update `pbs_kubernetes.PY` with values for attributes like schedulername, namespace.
 
 Install PBS Pro hook and config file
 ```bash
