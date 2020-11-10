@@ -56,11 +56,13 @@ import re
 e = pbs.event()
 euser = e.job.euser
 user_home = os.path.join(os.sep, "home", euser)
+hostname = pbs.get_local_nodename()
 
 # Set values to the following
 NON_DEFAULT_NAMESPACE = "default"
 schedulerName = ""
 serviceAccountName = ""
+kubeconfig_file = os.path.join(os.sep, "root", ".kube", "config")
 kubectl_path = os.path.join(os.sep, "usr", "bin", "kubectl")
 dynamic_pod_path = os.path.join(os.sep, "home", euser)
 
@@ -131,10 +133,10 @@ def execjob_end_handler():
         os.remove(pod_path)
     except OSError:
         pbs.logmsg(pbs.LOG_DEBUG, "Pod deletion Failed")
-    podname = str(j.id)
+    podname = str(j.id) + "-" + hostname
         
-    os.chdir(user_home)
-    del_cmd = [kubectl_path, "delete", "pod", podname, "-n", NON_DEFAULT_NAMESPACE]
+    del_cmd = [kubectl_path, "--kubeconfig=" + kubeconfig_file,
+               "delete", "pod", podname, "-n", NON_DEFAULT_NAMESPACE]
     pbs.logmsg(pbs.LOG_DEBUG, "Running command : %s" % ' '.join(del_cmd))
     try:
         p = subprocess.Popen(del_cmd, shell=False,
@@ -155,7 +157,6 @@ def execjob_begin_handler():
     Method for pod creation
     """
     pbs.logmsg(pbs.EVENT_DEBUG, "%s: Method called" % (caller_name()))
-    hostname = pbs.get_local_nodename()
     mem = "0"
     cpu = 0
     execv_chunks = re.findall(r'\(.*?\)', str(e.job.exec_vnode))
@@ -179,7 +180,7 @@ def execjob_begin_handler():
     pod_discription = """apiVersion: v1
 kind: Pod
 metadata:
-  name: """ + str(e.job.id) + """
+  name: """ + str(e.job.id) + "-" + hostname + """
   namespace: """ + NON_DEFAULT_NAMESPACE + """
 spec:
   schedulerName: """ + schedulerName + """
@@ -200,8 +201,7 @@ spec:
         except IOError:
             pbs.logmsg(pbs.EVENT_DEBUG,
                        "I/O error in writing to file: %s" % pod_path)
-        os.chdir(user_home)
-        cmd = [kubectl_path, "apply", "-f", pod_path]
+        cmd = [kubectl_path, "--kubeconfig=" + kubeconfig_file, "apply", "-f", pod_path]
         try:
             p = subprocess.Popen(cmd, shell=False,
                                  stdout=subprocess.PIPE,
