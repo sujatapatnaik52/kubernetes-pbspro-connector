@@ -129,7 +129,7 @@ def execjob_end_handler():
                "Deleting the Pod associated with job %s" % j.id)
     try:
         pod_path = os.path.join(dynamic_pod_path, 
-                                str(e.job.Job_Name) + ".yaml")
+                                str(e.job.Job_Name) + "-" + hostname + ".yaml")
         os.remove(pod_path)
     except OSError:
         pbs.logmsg(pbs.LOG_DEBUG, "Pod deletion Failed")
@@ -176,7 +176,7 @@ def execjob_begin_handler():
         mem = str(e.job.Resource_List["mem"])
         mem = mem[:-2]
     pod_path = os.path.join(dynamic_pod_path,
-                            str(e.job.Job_Name) + ".yaml")
+                            str(e.job.Job_Name) + "-" + hostname + ".yaml")
     pod_discription = """apiVersion: v1
 kind: Pod
 metadata:
