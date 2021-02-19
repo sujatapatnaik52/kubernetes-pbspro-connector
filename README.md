@@ -49,27 +49,10 @@ Change directory to scheduler folder.
 ```bash
 cd scheduler
 ```
-
-Update `kubernetes.go` by adding the value for `apiHost`, the location of [apiproxy server](https://kubernetes.io/docs/concepts/cluster-administration/proxies/):
-Example below will use the apiproxy server port 8001
-```bash
-# in file scheduler/kubernetes.go update line:
-apiHost           = "127.0.0.1:8001"
-```
-
 Build the custom scheduler
 ```bash
 go build -a --ldflags '-extldflags "-static"' -tags netgo -installsuffix netgo .  
 ```
-
-### Start apiserver proxy
-As root, start apiserver proxy. 
-Recommend starting apiserver proxy in a different terminal window as it will log information to the screen.
-
-```bash
-kubectl proxy
-```
-
 ### Start scheduler
 As root, start the custom scheduler (`kubernetes-pbspro-connector/scheduler/scheduler`).
 Recommend starting scheduler in a different terminal window as it will log information to the screen.
@@ -108,13 +91,20 @@ kubectl create namespace redis
 Update `kubernetes.go` by adding the value for `nonDefaultNamespace`:
 ```bash
 # in file scheduler/kubernetes.go update line:
-nonDefaultNamespace           = "redis"
+Namespaces_list  = []string{"default", "redis"}
 ```
 
 Update `pbs_kubernetes.PY` by adding the value for `NON_DEFAULT_NAMESPACE`:
 ```bash
 NON_DEFAULT_NAMESPACE  = "redis"
 ```
+Update the service account to be used by the scheduler
+```bash
+# in file scheduler/main.go update line:
+serviceacc := "default"
+```
+
+Ensure the path to kubectl is set correctly in scheduler/main.go and path to qstat and qsub is set properly in scheduler/kubernetes.go
 
 ### Specify cpu and memory requests
 To specify a cpu and memory request for a Container, include the resources:requests field in the Container's resource manifest. To specify a cpu and memory limit, include resources:limits. See example below

@@ -70,16 +70,16 @@ type PBSPodMetadata struct {
 
 
 var (
-	nonDefaultNamespace = "asml-pbs"
+	Namespaces_list  = []string{"default"}
 	bindingEndpoint  = "/api/v1/namespaces/%s/pods/%s/binding/"
 	eventEndpoint    = "/api/v1/namespaces/%s/events"
 	nodeEndpoint     = "/api/v1/nodes"
 	podEndpoint      = "/api/v1/pods"
-	podNamespace	  = "/api/v1/namespaces/%s/pods/"
+	podNamespace	 = "/api/v1/namespaces/%s/pods/"
 	watchPodEndpoint = "/api/v1/watch/pods"
 )
 
-func postsEvent(event Event, apiserver string, token string) error {
+func postsEvent(event Event, apiserver string, token string, pod_namespace string) error {
 	var bf []byte
 	body := bytes.NewBuffer(bf)
 	error := json.NewEncoder(body).Encode(event)
@@ -94,7 +94,7 @@ func postsEvent(event Event, apiserver string, token string) error {
 		Method:        http.MethodPost,
 		URL: &url.URL{
 			Host:   apiserver,
-			Path:   fmt.Sprintf(eventEndpoint, nonDefaultNamespace),
+			Path:   fmt.Sprintf(eventEndpoint, pod_namespace),
 			Scheme: "https",
 		},
 	}
@@ -214,7 +214,17 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 	
 	var spaceRequired int
 	var memoryRequired int
-	jobid := ""	
+	flag := 0
+	for _,item := range Namespaces_list {
+		if item == pod.Metadata.NameSpace {
+			flag = 1
+		}
+	}
+	if flag == 0 {
+		log.Println("Pod " + pod.Metadata.Name + " part of " + pod.Metadata.NameSpace + " namespace. Skip scheduling")
+		return "",nil
+	}
+	jobid := ""
 	if pod.Metadata.Annotations["JobID"] == "" {
 
 		//calculate resources
@@ -297,11 +307,11 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 		InvolvedObject: ObjectReference{
 			Kind:      "Pod",
 			Name:      pod.Metadata.Name,
-			Namespace: nonDefaultNamespace,
+			Namespace: pod.Metadata.NameSpace,
 			Uid:       pod.Metadata.Uid,
 		},
 	}
-	postsEvent(event, apiserver, token)		
+	postsEvent(event, apiserver, token, pod.Metadata.NameSpace)
 	return "",nil
 	
 	
@@ -384,7 +394,7 @@ func annotation(pod *Pod, jobid string, apiserver string, token string) {
 		os.Exit(1)
 	}
 
-	var ns = fmt.Sprintf(podNamespace, nonDefaultNamespace)	
+	var ns = fmt.Sprintf(podNamespace, pod.Metadata.NameSpace)
 	url := "https://" + apiserver + ns + pod.Metadata.Name
 	req, error := http.NewRequest("PATCH", url, body)
 	if error != nil {
@@ -441,7 +451,7 @@ func bind(pod *Pod, node string, apiserver string, token string) error {
 		Method:        http.MethodPost,
 		URL: &url.URL{
 			Host:   apiserver,
-			Path:   fmt.Sprintf(bindingEndpoint, nonDefaultNamespace, pod.Metadata.Name),
+			Path:   fmt.Sprintf(bindingEndpoint, pod.Metadata.NameSpace, pod.Metadata.Name),
 			Scheme: "https",
 		},
 	}
@@ -476,10 +486,10 @@ func bind(pod *Pod, node string, apiserver string, token string) error {
 		InvolvedObject: ObjectReference{
 			Kind:      "Pod",
 			Name:      pod.Metadata.Name,
-			Namespace: nonDefaultNamespace,
+			Namespace: pod.Metadata.NameSpace,
 			Uid:       pod.Metadata.Uid,
 		},
 	}
 	log.Println(msg)
-	return postsEvent(event, apiserver, token)
+	return postsEvent(event, apiserver, token, pod.Metadata.NameSpace)
 }
