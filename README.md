@@ -103,6 +103,10 @@ Update the service account to be used by the scheduler
 # in file scheduler/main.go update line:
 serviceacc := "default"
 ```
+Update the scheduler name
+```bash
+# in file scheduler/kubernetes.go update line:
+sched_name = "PBS_custom_sched"
 
 Ensure the path to kubectl is set correctly in scheduler/main.go and path to qstat and qsub is set properly in scheduler/kubernetes.go
 

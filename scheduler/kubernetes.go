@@ -71,6 +71,7 @@ type PBSPodMetadata struct {
 
 var (
 	Namespaces_list  = []string{"default"}
+	sched_name = "PBS_custom_sched"
 	bindingEndpoint  = "/api/v1/namespaces/%s/pods/%s/binding/"
 	eventEndpoint    = "/api/v1/namespaces/%s/events"
 	nodeEndpoint     = "/api/v1/nodes"
@@ -214,14 +215,20 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 	
 	var spaceRequired int
 	var memoryRequired int
-	flag := 0
-	for _,item := range Namespaces_list {
+        flag := 0
+        // check if pod belongs in the list of supported namespaces
+        for _,item := range Namespaces_list {
 		if item == pod.Metadata.NameSpace {
 			flag = 1
 		}
 	}
 	if flag == 0 {
-		log.Println("Pod " + pod.Metadata.Name + " part of " + pod.Metadata.NameSpace + " namespace. Skip scheduling")
+                log.Println("Pod " + pod.Metadata.Name + " part of " + pod.Metadata.NameSpace + " namespace. Skip scheduling")
+		return "",nil
+	}
+	// check the schedulerName of the pod
+	if sched_name != pod.Spec.SchedulerName {
+		log.Println("Skip scheduling Pod " + pod.Metadata.Name)
 		return "",nil
 	}
 	jobid := ""
@@ -277,7 +284,7 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 		log.Println("Job Scheduled, associating node " + nodename + " to " + pod.Metadata.Name)
 		return nodename, nil
 	} 
-
+	log.Println("PBS job not running, looking for comment in qstat -f")
 	out1, err := exec.Command("bash", "-c" ,"/opt/pbs/bin/qstat -f " + jobid).Output()        
         if err != nil {
             log.Fatal(err)
@@ -285,14 +292,13 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
         }
 	comment := string(out1)
  	splits := strings.Split(comment, "\n")	
-	i := 0
-	for i >= 0{
-            if strings.Contains(splits[i], "comment") {
-                break;
+	for i, n := range splits{
+		if strings.Contains(n, "comment") {
+			log.Println(pod.Metadata.Name + ":" + splits[i])
+			break;
             }
             i++;
         }	
-	log.Println(pod.Metadata.Name + ":" + splits[i])	 
 
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	event := Event{

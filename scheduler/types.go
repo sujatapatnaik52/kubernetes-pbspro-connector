@@ -84,6 +84,7 @@ type Pod struct {
 }
 
 type PodSpec struct {
+	SchedulerName  string  `json:"schedulerName"`
 	NodeName   string      `json:"nodeName"`
 	Containers []Container `json:"containers"`
 }
