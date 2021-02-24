@@ -70,8 +70,8 @@ type PBSPodMetadata struct {
 
 
 var (
-	Namespaces_list  = []string{"default"}
 	sched_name = "PBS_custom_sched"
+	queue_name = "reservationK8"
 	bindingEndpoint  = "/api/v1/namespaces/%s/pods/%s/binding/"
 	eventEndpoint    = "/api/v1/namespaces/%s/events"
 	nodeEndpoint     = "/api/v1/nodes"
@@ -213,11 +213,21 @@ func getUnscheduledPods(apiserver string, token string) (*PodList, error) {
 
 func fit(pod *Pod, apiserver string, token string) (string,error) {
 	
-	var spaceRequired int
-	var memoryRequired int
-        flag := 0
+	spaceRequired := 0
+	memoryRequired := 0
+	flag := 0
+
+	ns, err := exec.Command("/usr/bin/kubectl", "get", "ns", "-l", sched_name + "=true", "-o", "name").Output()
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+        }
+	ns_list := strings.Split(string(ns), "\n")
+	ns_list = ns_list[:len(ns_list)-1]
+
         // check if pod belongs in the list of supported namespaces
-        for _,item := range Namespaces_list {
+        for _,item := range ns_list {
+		item := strings.Split(item, "/")[1]
 		if item == pod.Metadata.NameSpace {
 			flag = 1
 		}
@@ -237,32 +247,65 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 		//calculate resources
 
 		for _, c := range pod.Spec.Containers {
-			milliCores := strings.TrimSuffix(c.Resources.Requests["cpu"], "m")
-			cores, err := strconv.Atoi(milliCores)
-			if err != nil {
-                        	return "Error",err
-                        }
-			spaceRequired += cores				
+			cpu_req := c.Resources.Requests["cpu"]
+			if strings.HasSuffix(cpu_req, "m") {
+				cpu_req = strings.TrimSuffix(cpu_req, "m")
+				cores, err := strconv.Atoi(cpu_req)
+                                if err != nil {
+                                        return "Error",err
+                                }
+				if cores > 1000 {
+					cores = cores/1000
+				} else if cores < 1000 && cores > 0{
+					cores = 1
+				}
+				spaceRequired += cores
+				continue
+			}
+			if cpu_req != "" {
+				cores, err := strconv.Atoi(cpu_req)
+				if err != nil {
+                        		return "Error",err
+                        	}
+				spaceRequired += cores
+			}
 		}
-		
+		if spaceRequired == 0 {
+			spaceRequired = 1
+		}
 		ncpus := strconv.Itoa(spaceRequired)
 
+		suffix := ""
+		mem_req := ""
 		for _, c := range pod.Spec.Containers {
 			if strings.HasSuffix(c.Resources.Requests["memory"], "Mi") {
-				milliCores1 := strings.TrimSuffix(c.Resources.Requests["memory"], "Mi")
-				cores1, err1 := strconv.Atoi(milliCores1)
+				suffix = "MB"
+				mem_req = strings.TrimSuffix(c.Resources.Requests["memory"], "Mi")
+			}
+			if strings.HasSuffix(c.Resources.Requests["memory"], "Gi") {
+                                suffix = "GB"
+                                mem_req = strings.TrimSuffix(c.Resources.Requests["memory"], "Gi")
+                        }
+			if strings.HasSuffix(c.Resources.Requests["memory"], "Ki") {
+                                suffix = "KB"
+                                mem_req = strings.TrimSuffix(c.Resources.Requests["memory"], "Ki")
+                        }
+			if mem_req != "" {
+				mem, err1 := strconv.Atoi(mem_req)
 				if err1 != nil {
 					return "Error",err1
 				}
-				memoryRequired += cores1
+				memoryRequired += mem
 			}
 		}	
 		mem := strconv.Itoa(memoryRequired)
-		mem = mem + "MB"
+		mem = mem + suffix
 
-		argstr := []string{"-l","select=1:ncpus=" + ncpus + ":mem="+mem,"-N",pod.Metadata.Name,"-v","PODNAME="+pod.Metadata.Name,"kubernetes_job.sh"}
-		out, err := exec.Command("/opt/pbs/bin/qsub", argstr...).Output()
+		argstr := "/opt/pbs/bin/qsub -l select=1:ncpus=" + ncpus + ":mem=" + mem + " -N " +pod.Metadata.Name + " -q " + queue_name + " -vPODNAME=" + pod.Metadata.Name + ",PODNS=" + pod.Metadata.NameSpace + " kubernetes_job.sh"
+		log.Println(argstr)
+		out, err := exec.Command("bash", "-c", argstr).Output()
 	        if err != nil {
+		    log.Println("qsub failed")
 	            log.Fatal(err)
         	    os.Exit(1)
         	}
@@ -426,8 +469,7 @@ func annotation(pod *Pod, jobid string, apiserver string, token string) {
 		os.Exit(1)
 	}
 	
-	log.Println("Associating Jobid " + jobid + " to pod " + pod.Metadata.Name)
-
+	log.Println("Associating Jobid " + jobid + " to pod " + pod.Metadata.Name + " in namespace " + pod.Metadata.NameSpace)
 }
 
 
@@ -478,7 +520,7 @@ func bind(pod *Pod, node string, apiserver string, token string) error {
 	}
 
 	// Shoot a Kubernetes event that the Pod was scheduled successfully.
-	msg := fmt.Sprintf("Successfully assigned %s to %s", pod.Metadata.Name, node)
+	msg := fmt.Sprintf("Successfully assigned %s to %s in namespace %s", pod.Metadata.Name, node, pod.Metadata.NameSpace)
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	event := Event{
 		Count:          1,

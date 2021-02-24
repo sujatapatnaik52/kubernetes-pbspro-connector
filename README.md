@@ -88,12 +88,6 @@ Create a namespace
 kubectl create namespace redis
 ```
 
-Update `kubernetes.go` by adding the value for `nonDefaultNamespace`:
-```bash
-# in file scheduler/kubernetes.go update line:
-Namespaces_list  = []string{"default", "redis"}
-```
-
 Update `pbs_kubernetes.PY` by adding the value for `NON_DEFAULT_NAMESPACE`:
 ```bash
 NON_DEFAULT_NAMESPACE  = "redis"
@@ -107,9 +101,19 @@ Update the scheduler name
 ```bash
 # in file scheduler/kubernetes.go update line:
 sched_name = "PBS_custom_sched"
-
+```
+Update the queue name
+```bash
+# in file scheduler/kubernetes.go update line:
+queue_name = "reservationK8"
+```
 Ensure the path to kubectl is set correctly in scheduler/main.go and path to qstat and qsub is set properly in scheduler/kubernetes.go
 
+Add lables to namespaces with value name being same as sched_name
+Because the scheduler does the following to identify the list of namespaces supported for scheduling
+```bash
+kubectl get ns -l sched_name
+```
 ### Specify cpu and memory requests
 To specify a cpu and memory request for a Container, include the resources:requests field in the Container's resource manifest. To specify a cpu and memory limit, include resources:limits. See example below
 ```bash

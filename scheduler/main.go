@@ -61,15 +61,16 @@ func main() {
         fmt.Printf("API server: %s\n", apiserver)
 
 	serviceacc := "default"
+	namespace := "default"
 
-        secret, err := exec.Command("/usr/bin/kubectl", "get", "serviceaccount", serviceacc, "-o", "jsonpath='{.secrets[0].name}'").Output()
+        secret, err := exec.Command("/usr/bin/kubectl", "get", "serviceaccount", serviceacc, "-o", "jsonpath='{.secrets[0].name}'", "-n" , namespace).Output()
         if err != nil {
                 log.Printf("%s", err)
         }
         secret = secret[1 : len(secret)-1]
         fmt.Printf("Service account: %s\n", secret)
 
-        token_en, err := exec.Command("/usr/bin/kubectl", "get", "secret", string(secret), "-o", "jsonpath='{.data.token}'").Output()
+        token_en, err := exec.Command("/usr/bin/kubectl", "get", "secret", string(secret), "-o", "jsonpath='{.data.token}'", "-n" , namespace).Output()
         if err != nil {
                 log.Printf("error %s\n", err)
         }
