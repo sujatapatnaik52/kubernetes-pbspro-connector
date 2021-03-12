@@ -70,8 +70,13 @@ type PBSPodMetadata struct {
 
 
 var (
-	sched_name = "PBS_custom_sched"
-	queue_name = "reservationK8"
+	kubectl_path     = "/usr/bin/kubectl"
+	qsub_path        = "/opt/pbs/bin/qsub"
+	qstat_path       = "/opt/pbs/bin/qstat"
+	sched_name       = "PBS_custom_sched"
+	queue_name       = "reservationK8"
+
+
 	bindingEndpoint  = "/api/v1/namespaces/%s/pods/%s/binding/"
 	eventEndpoint    = "/api/v1/namespaces/%s/events"
 	nodeEndpoint     = "/api/v1/nodes"
@@ -217,7 +222,7 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 	memoryRequired := 0
 	flag := 0
 
-	ns, err := exec.Command("/usr/bin/kubectl", "get", "ns", "-l", sched_name + "=true", "-o", "name").Output()
+	ns, err := exec.Command(kubectl_path, "get", "ns", "-l", sched_name + "=true", "-o", "name").Output()
 	if err != nil {
 		log.Fatal(err)
 		os.Exit(1)
@@ -301,7 +306,7 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 		mem := strconv.Itoa(memoryRequired)
 		mem = mem + suffix
 
-		argstr := "/opt/pbs/bin/qsub -l select=1:ncpus=" + ncpus + ":mem=" + mem + " -N " +pod.Metadata.Name + " -q " + queue_name + " -vPODNAME=" + pod.Metadata.Name + ",PODNS=" + pod.Metadata.NameSpace + " kubernetes_job.sh"
+		argstr := qsub_path + " -l select=1:ncpus=" + ncpus + ":mem=" + mem + " -N " +pod.Metadata.Name + " -q " + queue_name + " -vPODNAME=" + pod.Metadata.Name + ",PODNS=" + pod.Metadata.NameSpace + " kubernetes_job.sh"
 		log.Println(argstr)
 		out, err := exec.Command("bash", "-c", argstr).Output()
 	        if err != nil {
@@ -328,7 +333,7 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 		return nodename, nil
 	} 
 	log.Println("PBS job not running, looking for comment in qstat -f")
-	out1, err := exec.Command("bash", "-c" ,"/opt/pbs/bin/qstat -f " + jobid).Output()        
+	out1, err := exec.Command("bash", "-c" ,qstat_path + " -f " + jobid).Output()        
         if err != nil {
             log.Fatal(err)
             os.Exit(1)
@@ -371,7 +376,7 @@ func findnode(jobid string) string {
 
 	returnstring := ""
 
-        out1, err := exec.Command("bash", "-c" ,"/opt/pbs/bin/qstat -f " + jobid).Output()        
+        out1, err := exec.Command("bash", "-c" , qstat_path + " -f " + jobid).Output()        
         if err != nil {
             log.Fatal(err)
             os.Exit(1)

@@ -51,26 +51,30 @@ import (
 )
 
 
-func main() {	
- 
-	apiserver, err := exec.Command("/usr/bin/kubectl", "config", "view", "--minify", "-o", "jsonpath='{.clusters[0].cluster.server}'").Output()
-        if err != nil {
-        	log.Printf("%s", err)
-    	}
-	apiserver = apiserver[9 : len(apiserver)-1]         
-        fmt.Printf("API server: %s\n", apiserver)
+func main() {
 
+	
+	kubectl_path := "/usr/bin/kubectl"
 	serviceacc := "default"
 	namespace := "default"
 
-        secret, err := exec.Command("/usr/bin/kubectl", "get", "serviceaccount", serviceacc, "-o", "jsonpath='{.secrets[0].name}'", "-n" , namespace).Output()
+
+	apiserver, err := exec.Command(kubectl_path, "config", "view", "--minify", "-o", "jsonpath='{.clusters[0].cluster.server}'").Output()
+        if err != nil {
+        	log.Printf("%s", err)
+    	}
+
+	apiserver = apiserver[9 : len(apiserver)-1]         
+        fmt.Printf("API server: %s\n", apiserver)
+
+        secret, err := exec.Command(kubectl_path, "get", "serviceaccount", serviceacc, "-o", "jsonpath='{.secrets[0].name}'", "-n" , namespace).Output()
         if err != nil {
                 log.Printf("%s", err)
         }
         secret = secret[1 : len(secret)-1]
         fmt.Printf("Service account: %s\n", secret)
 
-        token_en, err := exec.Command("/usr/bin/kubectl", "get", "secret", string(secret), "-o", "jsonpath='{.data.token}'", "-n" , namespace).Output()
+        token_en, err := exec.Command(kubectl_path, "get", "secret", string(secret), "-o", "jsonpath='{.data.token}'", "-n" , namespace).Output()
         if err != nil {
                 log.Printf("error %s\n", err)
         }
