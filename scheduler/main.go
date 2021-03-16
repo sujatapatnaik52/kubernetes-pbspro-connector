@@ -48,6 +48,7 @@ import (
 	"os/exec"        
 	"fmt"
 	"encoding/base64"
+	"bytes"
 )
 
 
@@ -58,27 +59,47 @@ func main() {
 	serviceacc := "default"
 	namespace := "default"
 
+	var outb, errb bytes.Buffer
 
-	apiserver, err := exec.Command(kubectl_path, "config", "view", "--minify", "-o", "jsonpath='{.clusters[0].cluster.server}'").Output()
+	cmd := exec.Command(kubectl_path, "config", "view", "--minify", "-o", "jsonpath='{.clusters[0].cluster.server}'")
+	cmd.Stdout = &outb
+        cmd.Stderr = &errb
+	err := cmd.Run()
         if err != nil {
+		log.Printf("%s", errb.String())
         	log.Printf("%s", err)
+		os.Exit(1)
     	}
-
-	apiserver = apiserver[9 : len(apiserver)-1]         
+	apiserver := outb.String()
+	apiserver = apiserver[9 : len(apiserver)-1]
         fmt.Printf("API server: %s\n", apiserver)
 
-        secret, err := exec.Command(kubectl_path, "get", "serviceaccount", serviceacc, "-o", "jsonpath='{.secrets[0].name}'", "-n" , namespace).Output()
+        cmd = exec.Command(kubectl_path, "get", "serviceaccount", serviceacc, "-o", "jsonpath='{.secrets[0].name}'", "-n" , namespace)
+	var outb1, errb1 bytes.Buffer
+	cmd.Stdout = &outb1
+	cmd.Stderr = &errb1
+	err = cmd.Run()
         if err != nil {
-                log.Printf("%s", err)
+		log.Printf("%s", errb1.String())
+		log.Printf("%s", err)
+		os.Exit(1)
         }
+	secret := outb1.String()
         secret = secret[1 : len(secret)-1]
         fmt.Printf("Service account: %s\n", secret)
 
-        token_en, err := exec.Command(kubectl_path, "get", "secret", string(secret), "-o", "jsonpath='{.data.token}'", "-n" , namespace).Output()
+        cmd = exec.Command(kubectl_path, "get", "secret", string(secret), "-o", "jsonpath='{.data.token}'", "-n" , namespace)
+	var outb2, errb2 bytes.Buffer
+	cmd.Stdout = &outb2
+        cmd.Stderr = &errb2
+        err = cmd.Run()
         if err != nil {
-                log.Printf("error %s\n", err)
+		log.Printf("%s", errb2.String())
+		log.Printf("error %s\n", err)
+		os.Exit(1)
         }
 
+	token_en := outb2.String()
 	token_de, err := base64.StdEncoding.DecodeString(string(token_en[1 : len(token_en)-1]))
         if err != nil {
                 log.Fatal("error:", err)

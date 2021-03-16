@@ -158,6 +158,8 @@ func watchUnscheduledPods(apiserver string, token string) (<-chan Pod, <-chan er
 
 			if res.StatusCode != 200 {
 				errc <- errors.New("Error code: " + res.Status)
+				b, _ := ioutil.ReadAll(res.Body)
+				log.Println(string(b))
 				time.Sleep(5 * time.Second)
 				continue
 			}
@@ -280,7 +282,7 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 		}
 		ncpus := strconv.Itoa(spaceRequired)
 
-		suffix := ""
+		suffix := "MB"
 		mem_req := ""
 		for _, c := range pod.Spec.Containers {
 			if strings.HasSuffix(c.Resources.Requests["memory"], "Mi") {
@@ -302,7 +304,10 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 				}
 				memoryRequired += mem
 			}
-		}	
+		}
+		if memoryRequired == 0 {
+			memoryRequired = 1
+		}
 		mem := strconv.Itoa(memoryRequired)
 		mem = mem + suffix
 
@@ -470,6 +475,8 @@ func annotation(pod *Pod, jobid string, apiserver string, token string) {
 		os.Exit(1)
 	}					
 	if res.StatusCode != 200 {
+		b, _ := ioutil.ReadAll(res.Body)
+		log.Println(string(b))
 		log.Println(error)
 		os.Exit(1)
 	}
@@ -521,7 +528,9 @@ func bind(pod *Pod, node string, apiserver string, token string) error {
 		return error
 	}
 	if res.StatusCode != 201 {
-		return errors.New("Binding: Unexpected HTTP status code" + res.Status)
+		b, _ := ioutil.ReadAll(res.Body)
+		log.Println(string(b))
+		return errors.New("Binding: Unexpected HTTP status code" + res.Status)		
 	}
 
 	// Shoot a Kubernetes event that the Pod was scheduled successfully.
