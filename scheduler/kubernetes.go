@@ -45,7 +45,6 @@ import (
 	"io/ioutil"
 	"log"
 	"fmt"
-	"os"
 	"os/exec"         
 	"net/http"
 	"net/url"
@@ -117,6 +116,8 @@ func postsEvent(event Event, apiserver string, token string, pod_namespace strin
 		return error
 	}
 	if res.StatusCode != 201 {
+		b, _ := ioutil.ReadAll(res.Body)
+		log.Println(string(b))
 		return errors.New("Event: Unexpected HTTP status code" + res.Status)
 	}
 	return nil
@@ -226,8 +227,7 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 
 	ns, err := exec.Command(kubectl_path, "get", "ns", "-l", sched_name + "=true", "-o", "name").Output()
 	if err != nil {
-		log.Fatal(err)
-		os.Exit(1)
+		log.Println(err)
         }
 	ns_list := strings.Split(string(ns), "\n")
 	ns_list = ns_list[:len(ns_list)-1]
@@ -316,8 +316,7 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 		out, err := exec.Command("bash", "-c", argstr).Output()
 	        if err != nil {
 		    log.Println("qsub failed")
-	            log.Fatal(err)
-        	    os.Exit(1)
+	            log.Println(err)
         	}
         	jobid = string(out)
 		last := len(jobid) - 1
@@ -340,8 +339,7 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 	log.Println("PBS job not running, looking for comment in qstat -f")
 	out1, err := exec.Command("bash", "-c" ,qstat_path + " -f " + jobid).Output()        
         if err != nil {
-            log.Fatal(err)
-            os.Exit(1)
+            log.Println(err)
         }
 	comment := string(out1)
  	splits := strings.Split(comment, "\n")	
@@ -383,8 +381,8 @@ func findnode(jobid string) string {
 
         out1, err := exec.Command("bash", "-c" , qstat_path + " -f " + jobid).Output()        
         if err != nil {
-            log.Fatal(err)
-            os.Exit(1)
+		log.Println("qstat failed")
+		log.Println(err)
         }
 	nodevalue := string(out1)
  	splits := strings.Split(nodevalue, " ")	
@@ -450,7 +448,6 @@ func annotation(pod *Pod, jobid string, apiserver string, token string) {
 	error := json.NewEncoder(body).Encode(patch)
 	if error != nil {
 		log.Println(error)
-		os.Exit(1)
 	}
 
 	var ns = fmt.Sprintf(podNamespace, pod.Metadata.NameSpace)
@@ -458,7 +455,6 @@ func annotation(pod *Pod, jobid string, apiserver string, token string) {
 	req, error := http.NewRequest("PATCH", url, body)
 	if error != nil {
 		log.Println(error)
-		os.Exit(1)
 	}
 	
 	req.Header.Set("Content-Type", "application/strategic-merge-patch+json")
@@ -472,13 +468,11 @@ func annotation(pod *Pod, jobid string, apiserver string, token string) {
 	res, error := client.Do(req)
 	if error != nil {
 		log.Println(error)
-		os.Exit(1)
 	}					
 	if res.StatusCode != 200 {
 		b, _ := ioutil.ReadAll(res.Body)
 		log.Println(string(b))
 		log.Println(error)
-		os.Exit(1)
 	}
 	
 	log.Println("Associating Jobid " + jobid + " to pod " + pod.Metadata.Name + " in namespace " + pod.Metadata.NameSpace)
