@@ -58,27 +58,31 @@ func main() {
 	kubectl_path := "/usr/bin/kubectl"
 	serviceacc := "default"
 	namespace := "default"
+	
+	apiserver := ""
 
-	var outb, errb bytes.Buffer
+	if apiserver == ""{
+		var outb, errb bytes.Buffer
+		cmd_api := exec.Command(kubectl_path, "config", "view", "--minify", "-o", "jsonpath='{.clusters[0].cluster.server}'")
+		cmd_api.Stdout = &outb
+	        cmd_api.Stderr = &errb
+		err_api := cmd_api.Run()
+	        if err_api != nil {
+			log.Printf("%s", errb.String())
+       		 	log.Printf("%s", err_api)
+			os.Exit(1)
+    		}
+		apiserver = outb.String()
+		apiserver = apiserver[9 : len(apiserver)-1]
+	}
 
-	cmd := exec.Command(kubectl_path, "config", "view", "--minify", "-o", "jsonpath='{.clusters[0].cluster.server}'")
-	cmd.Stdout = &outb
-        cmd.Stderr = &errb
-	err := cmd.Run()
-        if err != nil {
-		log.Printf("%s", errb.String())
-        	log.Printf("%s", err)
-		os.Exit(1)
-    	}
-	apiserver := outb.String()
-	apiserver = apiserver[9 : len(apiserver)-1]
-        fmt.Printf("API server: %s\n", apiserver)
+	fmt.Printf("API server: %s\n", apiserver)
 
-        cmd = exec.Command(kubectl_path, "get", "serviceaccount", serviceacc, "-o", "jsonpath='{.secrets[0].name}'", "-n" , namespace)
+        cmd := exec.Command(kubectl_path, "get", "serviceaccount", serviceacc, "-o", "jsonpath='{.secrets[0].name}'", "-n" , namespace)
 	var outb1, errb1 bytes.Buffer
 	cmd.Stdout = &outb1
 	cmd.Stderr = &errb1
-	err = cmd.Run()
+	err := cmd.Run()
         if err != nil {
 		log.Printf("%s", errb1.String())
 		log.Printf("%s", err)

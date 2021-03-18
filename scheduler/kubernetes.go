@@ -282,7 +282,7 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 		}
 		ncpus := strconv.Itoa(spaceRequired)
 
-		suffix := "MB"
+		suffix := "KB"
 		mem_req := ""
 		for _, c := range pod.Spec.Containers {
 			if strings.HasSuffix(c.Resources.Requests["memory"], "Mi") {
@@ -302,6 +302,12 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 				if err1 != nil {
 					return "Error",err1
 				}
+				if suffix == "MB" {
+					mem = mem * 1000
+				}
+				if suffix == "GB" {
+                                        mem = mem * 1000000
+                                }
 				memoryRequired += mem
 			}
 		}
@@ -309,7 +315,7 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 			memoryRequired = 1
 		}
 		mem := strconv.Itoa(memoryRequired)
-		mem = mem + suffix
+		mem = mem + "KB"
 
 		argstr := qsub_path + " -l select=1:ncpus=" + ncpus + ":mem=" + mem + " -N " +pod.Metadata.Name + " -q " + queue_name + " -vPODNAME=" + pod.Metadata.Name + ",PODNS=" + pod.Metadata.NameSpace + " kubernetes_job.sh"
 		log.Println(argstr)
@@ -348,7 +354,6 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 			log.Println(pod.Metadata.Name + ":" + splits[i])
 			break;
             }
-            i++;
         }	
 
 	timestamp := time.Now().UTC().Format(time.RFC3339)
@@ -389,19 +394,18 @@ func findnode(jobid string) string {
 	flag1 := "job_state"
 	flag2 := "substate"
 	i := 0
-	for i >= 0{
-            if splits[i] == flag1 {
+	for c, n := range splits{
+            if strings.Contains(n, flag1) {
+		i = c
                 break;
             }
-            i++;
         }
-	
 	j := 0
-	for j >= 0{
-            if splits[j] == flag2 {
+	for c, n := range splits{
+            if strings.Contains(n, flag2) {
+		j = c
                 break;
             }
-            j++;
         }
 	job_state := splits[i+2]
 	last1 := len(job_state) - 1		
