@@ -223,6 +223,7 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 	
 	spaceRequired := 0
 	memoryRequired := 0
+	gpuRequsted := 0
 	flag := 0
 
 	ns, err := exec.Command(kubectl_path, "get", "ns", "-l", sched_name + "=true", "-o", "name").Output()
@@ -254,7 +255,15 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 		//calculate resources
 
 		for _, c := range pod.Spec.Containers {
-			cpu_req := c.Resources.Requests["cpu"]
+			gpu_req := c.Resources.Requests["nvidia.com/gpu"]
+			if gpu_req != "" {
+                                gpus, err := strconv.Atoi(gpu_req)
+                                if err != nil {
+                                        return "Error",err
+                                }
+                                gpuRequsted += gpus
+                        }
+                        cpu_req := c.Resources.Requests["cpu"]
 			if strings.HasSuffix(cpu_req, "m") {
 				cpu_req = strings.TrimSuffix(cpu_req, "m")
 				cores, err := strconv.Atoi(cpu_req)
@@ -277,6 +286,7 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 				spaceRequired += cores
 			}
 		}
+
 		if spaceRequired == 0 {
 			spaceRequired = 1
 		}
@@ -317,7 +327,15 @@ func fit(pod *Pod, apiserver string, token string) (string,error) {
 		mem := strconv.Itoa(memoryRequired)
 		mem = mem + "KB"
 
-		argstr := qsub_path + " -l select=1:ncpus=" + ncpus + ":mem=" + mem + " -N " +pod.Metadata.Name + " -q " + queue_name + " -vPODNAME=" + pod.Metadata.Name + ",PODNS=" + pod.Metadata.NameSpace + " kubernetes_job.sh"
+		qsub_select := ""
+		if gpuRequsted != 0 {
+			ngpus := strconv.Itoa(gpuRequsted)
+			qsub_select = " -l select=1:ncpus=" + ncpus + ":mem=" + mem + ":ngpus=" + ngpus
+		} else {
+			qsub_select = " -l select=1:ncpus=" + ncpus + ":mem=" + mem
+		}
+
+		argstr := qsub_path + qsub_select + " -N " +pod.Metadata.Name + " -q " + queue_name + " -vPODNAME=" + pod.Metadata.Name + ",PODNS=" + pod.Metadata.NameSpace + " kubernetes_job.sh"
 		log.Println(argstr)
 		out, err := exec.Command("bash", "-c", argstr).Output()
 	        if err != nil {
