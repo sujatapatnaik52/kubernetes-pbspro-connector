@@ -1,8 +1,6 @@
 # Kubernetes Connector for PBS Professional
 
-Integration of PBS Professional with Kubernetes for PBS Pro to provision and schedule jobs along with docker containers. This integration will benefit sites in being able to run both HPC workloads as well as container workloads on the same HPC cluster without needing for partitioning into two separate portions. This integration will also allow sites to take advantage of the sophisticated scheduling algorithms in PBS Pro and administer the cluster centrally using a single scheduler with a global set of policies. Kubernetes ships with a default scheduler but since the default scheduler does not suit our needs, a custom scheduler which talks to the server, getting unscheduled pods, then talking to PBS Pro for scheduling them. This custom scheduler has not been verified to run alongside the default Kubernetes scheduler. In theory, user can instruct Kubernetes which scheduler to use in the pod definition. This Integration is also achieved using PBS Pro hooks.  
-
-NOTE: The integration assumes a namespace; Requesting a custom namespace will result in failures or unknown results. 
+Integration of PBS Professional with Kubernetes for PBS Pro to provision and schedule jobs along with docker containers. This integration will benefit sites in being able to run both HPC workloads as well as container workloads on the same HPC cluster without needing for partitioning into two separate portions. This integration will also allow sites to take advantage of the sophisticated scheduling algorithms in PBS Pro and administer the cluster centrally using a single scheduler with a global set of policies. Kubernetes ships with a default scheduler but since the default scheduler does not suit our needs, a custom scheduler which talks to the server, getting unscheduled pods, then talking to PBS Pro for scheduling theem. In theory, user can instruct Kubernetes which scheduler to use in the pod definition. This Integration is also achieved using PBS Pro hooks.  
 
 A hook is a block of Python code that PBS Pro executes at certain events, for example, when a job is queued. Each hook can accept (allow) or reject (prevent) the action that triggers it. A hook can make calls to functions external to PBS Pro.
 
@@ -87,20 +85,26 @@ Create a namespace
 ```bash
 kubectl create namespace redis
 ```
-
-Update `pbs_kubernetes.PY` by adding the value for `NON_DEFAULT_NAMESPACE`:
+Add lebel sched_name=true to this namespace 
 ```bash
-NON_DEFAULT_NAMESPACE  = "redis"
+kubectl label ns redis PBS_custom_sched=true
 ```
-Update the service account to be used by the scheduler
+Note: The custom scheduler will schedule pods from more than one namespace.
+Add lables to namespaces with value name being same as sched_name
+Because the scheduler does the following to identify the list of namespaces supported for scheduling
 ```bash
-# in file scheduler/main.go update line:
-serviceacc := "default"
+kubectl get ns -l sched_name
 ```
 Update the scheduler name
 ```bash
 # in file scheduler/kubernetes.go update line:
 sched_name = "PBS_custom_sched"
+```
+
+Update the service account to be used by the scheduler
+```bash
+# in file scheduler/main.go update line:
+serviceacc := "default"
 ```
 Update the queue name
 ```bash
@@ -109,11 +113,13 @@ queue_name = "reservationK8"
 ```
 Ensure the path to kubectl is set correctly in scheduler/main.go and path to qstat and qsub is set properly in scheduler/kubernetes.go
 
-Add lables to namespaces with value name being same as sched_name
-Because the scheduler does the following to identify the list of namespaces supported for scheduling
+The default values set in scheduler/kubernetes.go are as follows:
 ```bash
-kubectl get ns -l sched_name
+kubectl_path     = "/usr/bin/kubectl"
+qsub_path        = "/opt/pbs/bin/qsub"
+qstat_path       = "/opt/pbs/bin/qstat"
 ```
+
 ### Specify cpu and memory requests
 To specify a cpu and memory request for a Container, include the resources:requests field in the Container's resource manifest. To specify a cpu and memory limit, include resources:limits. See example below
 ```bash
