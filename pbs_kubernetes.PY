@@ -62,7 +62,7 @@ hostname = pbs.get_local_nodename()
 NON_DEFAULT_NAMESPACE = "default"
 schedulerName = ""
 serviceAccountName = ""
-kubeconfig_file = os.path.join(os.sep, "root", ".kube", "config")
+kubeconfig_file = os.path.join(os.sep, "home", euser, ".kube", "config")
 kubectl_path = os.path.join(os.sep, "usr", "bin", "kubectl")
 dynamic_pod_path = os.path.join(os.sep, "home", euser)
 
@@ -157,8 +157,9 @@ def execjob_begin_handler():
     Method for pod creation
     """
     pbs.logmsg(pbs.EVENT_DEBUG, "%s: Method called" % (caller_name()))
-    mem = "0"
+    mem = 0
     cpu = 0
+    gpu = 0
     execv_chunks = re.findall(r'\(.*?\)', str(e.job.exec_vnode))
     chunks = []
 
@@ -171,10 +172,17 @@ def execjob_begin_handler():
             for rsc in chunk_val:
                 if "ncpus" in rsc:
                     cpu += int(rsc.split("=")[1])
+        if hostname in each and "ngpus" in each:
+            chunk_val = each.strip("(").strip(")").split(":")
+            for rsc in chunk_val:
+                if "ngpus" in rsc:
+                    gpu += int(rsc.split("=")[1])
+        if hostname in each and "mem" in each:
+            chunk_val = each.strip("(").strip(")").split(":")
+            for rsc in chunk_val:
+                if "mem" in rsc:
+                    mem += int((rsc.split("=")[1])[:-2])
 
-    if e.job.Resource_List["mem"] != None:
-        mem = str(e.job.Resource_List["mem"])
-        mem = mem[:-2]
     pod_path = os.path.join(dynamic_pod_path,
                             str(e.job.Job_Name) + "-" + hostname + ".yaml")
     pod_discription = """apiVersion: v1
@@ -192,7 +200,10 @@ spec:
     resources:
       requests:
         cpu: """ + str(cpu) + """
-        memory: """ + mem + """Mi"""
+        memory: """ + str(mem) + """Mi"""
+    if gpu:
+        pod_discription += """
+        nvidia.com/gpu: """ + str(gpu)
     if "PODNAME" not in str(e.job.Variable_List):
         try:
             with open(pod_path, "w") as f:

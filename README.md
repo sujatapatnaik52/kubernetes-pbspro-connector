@@ -23,14 +23,18 @@ Change directory to kubernetes-pbspro-connector folder.
 cd kubernetes-pbspro-connector
 ```
 
-Update `pbs_kubernetes.CF` with the absolute path to the kubelet config directory. 
-The value to --config is the absolute path to the directory that the kubelet will watch for pod manifests to run. This directory will need to be created before starting the scheduler.
+Update `pbs_kubernetes.PY` with values for attributes like schedulername, namespace, kubeconfig_file path, kubectl_path executable path and dynamic_pod_path 
+
+The default values are as follows:
+
 ```bash
-{
-    "kubelet_config": "/aboslute/path/to/kubelete_config"
-}
+NON_DEFAULT_NAMESPACE = "default"
+schedulerName = ""
+serviceAccountName = ""
+kubeconfig_file = os.path.join(os.sep, "home", euser, ".kube", "config")
+kubectl_path = os.path.join(os.sep, "usr", "bin", "kubectl")
+dynamic_pod_path = os.path.join(os.sep, "home", euser)
 ```
-Update `pbs_kubernetes.PY` with values for attributes like schedulername, namespace.
 
 Install PBS Pro hook and config file
 ```bash
@@ -39,7 +43,6 @@ create hook pbs-kubernetes
 set hook pbs-kubernetes event = execjob_end
 set hook pbs-kubernetes event += execjob_begin
 import hook pbs-kubernetes application/x-python default pbs_kubernetes.PY
-import hook pbs-kubernetes application/x-config default pbs_kubernetes.CF
 EOF
 ```
 
